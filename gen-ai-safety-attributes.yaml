@@ -1,0 +1,160 @@
+# GenAI Safety Semantic Conventions - Attribute Registry
+# Status: Proposed (Development)
+
+groups:
+  - id: gen_ai.safety
+    type: attribute_group
+    brief: "Attributes for GenAI safety evaluation telemetry"
+    attributes:
+      - id: gen_ai.safety.evaluation_performed
+        type: boolean
+        stability: development
+        brief: "Indicates that one or more safety evaluation systems processed this request or response."
+        examples: [true]
+        requirement_level: recommended
+        note: |
+          This attribute enables operators to distinguish between environments/requests 
+          where safety systems are active versus inactive.
+          
+          A value of `true` indicates safety evaluation occurred. Absence of this attribute
+          or a value of `false` indicates safety evaluation did not occur or the provider
+          does not report this information.
+          
+          This attribute does NOT indicate the outcome of safety evaluation (pass/fail).
+
+      - id: gen_ai.safety.evaluation_ids
+        type: string[]
+        stability: development
+        brief: "Provider-defined identifiers for safety evaluations performed."
+        examples: [["content_policy_v2", "pii_detection"]]
+        requirement_level: opt_in
+        note: |
+          Identifiers SHOULD be stable across requests but need not expose internal 
+          system names. Providers MAY use opaque identifiers.
+          
+          This attribute supports debugging and audit trails when operators need to
+          correlate behaviors across requests. It does NOT indicate pass/fail status.
+
+  - id: gen_ai.response.modification
+    type: attribute_group
+    brief: "Attributes for GenAI response modification telemetry"
+    attributes:
+      - id: gen_ai.response.modified
+        type: boolean
+        stability: development
+        brief: "Indicates the final response differs from initial generation due to post-generation processing."
+        examples: [true]
+        requirement_level: recommended
+        note: |
+          This includes safety filtering, content adjustment, PII redaction, or policy application.
+          
+          This attribute is critical for trust calibration. A modified response may warrant
+          different downstream handling than an unmodified response.
+
+      - id: gen_ai.response.modification_type
+        type:
+          allow_custom_values: true
+          members:
+            - id: safety_filter
+              value: "safety_filter"
+              brief: "Content modified due to safety policy"
+              stability: development
+            - id: pii_redaction
+              value: "pii_redaction"
+              brief: "Personally identifiable information removed"
+              stability: development
+            - id: truncation
+              value: "truncation"
+              brief: "Response truncated (length, time, tokens)"
+              stability: development
+            - id: format_adjustment
+              value: "format_adjustment"
+              brief: "Structure/format changed (not content)"
+              stability: development
+            - id: citation_injection
+              value: "citation_injection"
+              brief: "Citations or attributions added"
+              stability: development
+        stability: development
+        brief: "Categorizes the type of modification applied to the response."
+        examples: ["safety_filter", "pii_redaction"]
+        requirement_level:
+          conditionally_required: "if `gen_ai.response.modified` is `true`"
+        note: |
+          Different modification types have different implications for downstream use.
+          A truncated response may be continued; a safety-filtered response should not
+          be prompt-engineered around.
+
+      - id: gen_ai.response.generation_attempts
+        type: int
+        stability: development
+        brief: "Count of generation attempts before producing final response."
+        examples: [1, 3]
+        requirement_level: opt_in
+        note: |
+          A value greater than 1 indicates regeneration occurred.
+          Useful for debugging, cost attribution, and latency analysis.
+
+  - id: gen_ai.confidence
+    type: attribute_group
+    brief: "Attributes for GenAI confidence/uncertainty telemetry"
+    attributes:
+      - id: gen_ai.confidence.score
+        type: double
+        stability: development
+        brief: "Provider-computed confidence score representing assessment of response reliability."
+        examples: [0.85, 0.42]
+        requirement_level: opt_in
+        note: |
+          Scale of 0.0 (no confidence) to 1.0 (full confidence).
+          Providers SHOULD document their confidence computation methodology.
+          
+          Confidence scores are NOT directly comparable across providers or methods
+          without calibration.
+
+      - id: gen_ai.confidence.method
+        type:
+          allow_custom_values: true
+          members:
+            - id: logprob_derived
+              value: "logprob_derived"
+              brief: "Derived from token log probabilities"
+              stability: development
+            - id: self_evaluation
+              value: "self_evaluation"
+              brief: "Model self-assessment"
+              stability: development
+            - id: ensemble
+              value: "ensemble"
+              brief: "Agreement across multiple generations"
+              stability: development
+            - id: classifier
+              value: "classifier"
+              brief: "External classifier assessment"
+              stability: development
+            - id: calibrated_hybrid
+              value: "calibrated_hybrid"
+              brief: "Combination of methods with calibration"
+              stability: development
+        stability: development
+        brief: "Documents the method used to compute `gen_ai.confidence.score`."
+        examples: ["logprob_derived", "ensemble"]
+        requirement_level:
+          conditionally_required: "if `gen_ai.confidence.score` is provided"
+        note: |
+          Confidence scores computed via different methods have different reliability
+          characteristics. Downstream systems may weight or interpret scores differently
+          based on method.
+
+      - id: gen_ai.confidence.abstention_recommended
+        type: boolean
+        stability: development
+        brief: "Provider signal indicating this response may benefit from human review."
+        examples: [true]
+        requirement_level: opt_in
+        note: |
+          This is a provider recommendation, not a mandate. It enables providers to
+          communicate "soft" uncertainty that may not be captured in a numeric score.
+          
+          Supports human-in-the-loop architectures without requiring providers to
+          expose detailed reasoning.
